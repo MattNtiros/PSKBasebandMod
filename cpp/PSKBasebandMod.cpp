@@ -169,6 +169,8 @@ int PSKBasebandMod_i::serviceFunction()
 {
 	bool gen = generate; //caching off generate boolean
     bulkio::InUShortPort::dataTransfer *port_in = NULL;
+
+    //retrieve port input data provided user does not wish to generate random data
     if(!gen)
     {
     	port_in = symbols_in->getPacket(bulkio::Const::BLOCKING);
@@ -179,6 +181,7 @@ int PSKBasebandMod_i::serviceFunction()
     vector<unsigned short> *input;
     vector<value> *output;
 
+    //Updates values of various variables which store values from the previous iteration
     if(old_level != levels)
     	old_level = levels; //caching off
     if(old_packet_size != packet_size)
@@ -190,7 +193,7 @@ int PSKBasebandMod_i::serviceFunction()
     	{						//changes to 1 if it is
     		oversample_num = 1;
     		old_oversample = 1;
-    		cout << "WARNING - 'oversample_num' cannot be zero. changed to 1" << endl;
+    		LOG_WARN(PSKBasebandMod_i, "WARNING - 'oversample_num' cannot be zero. changed to 1");
     	}
     	if(old_packet_size % old_oversample != 0)
     	{
@@ -199,10 +202,12 @@ int PSKBasebandMod_i::serviceFunction()
     			temp--;
     		old_oversample = temp;
     		oversample_num = temp;
-    		cout << "WARNING - 'oversample_num' not divisible by packet size" << endl;
+    		LOG_WARN(PSKBasebandMod_i, "WARNING - 'oversample_num' not divisible by packet size\n");
     		cout << "Changed to " << old_oversample << endl;
     	}
     }
+
+    //ensures that the time difference between samples stored in xdelta matches the SRI information
     if(sri.xdelta != xdelta)
     {
     	sri.xdelta = xdelta;
@@ -210,7 +215,7 @@ int PSKBasebandMod_i::serviceFunction()
     }
 
 
-
+    //generates random input data and stores in input if gen is true, otherwise retrieves data from the port
     if(gen)
     {
     	randomInputData.resize(old_packet_size);
@@ -222,6 +227,8 @@ int PSKBasebandMod_i::serviceFunction()
 
     checkInput(*input, old_level); // warning log if any above the levels/push it down
 
+    //Performs the PSK modulation of each data point by assigning that data point a phase angle
+    //depending upon its level. The output is then stored in output.
     dataOut.resize(input->size());
     for(unsigned int i=0;i<input->size()/old_oversample;i++)
     {
@@ -257,21 +264,22 @@ int PSKBasebandMod_i::serviceFunction()
     return NORMAL;
 }
 
-
+//takes in the input data and the maximum allowed values and checks each data point in order
+//to ensure that the input data meets the requirements
 void PSKBasebandMod_i::checkInput(vector<unsigned short> &in, unsigned short maxVal)
 {
 	for(unsigned int i=0;i<in.size();i++)
 	{
 		if(in[i] > maxVal)
 		{
-			cout << "Warning: input data has values that are higher than levels" << endl;
-			cout << "\tChanging value to the maximum allowed value" << endl;
+			LOG_WARN(PSKBasebandMod_i, "Warning: input data has values that are higher than levels\nChanging value to the maximum allowed value")
 			in[i] = maxVal;
 		}
 	}
 }
 
-
+//rather than reading in data as an input, generates random data of size
+//old_packet_size and stores it in data
 void PSKBasebandMod_i::generateRandomData(vector<unsigned short> &data)
 {
 	for(unsigned int i=0;i<old_packet_size;i++)
